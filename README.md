@@ -56,6 +56,13 @@ Example:
 SHOP_DB_PATH=/data/shop.db npm run dev
 ```
 
+## Supabase + Vercel
+
+Migration and deployment guide:
+
+- `SUPABASE_VERCEL_GITHUB_SETUP.md`
+- Supabase SQL migrations in `supabase/migrations`
+
 ## Manual QA Checklist
 
 Use this checklist to validate the full student flow end-to-end.
