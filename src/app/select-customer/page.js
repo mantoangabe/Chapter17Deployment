@@ -24,36 +24,52 @@ export default async function SelectCustomerPage({ searchParams }) {
       </section>
     );
   }
-  const required = await requireTables(["customers"]);
-  if (!required.ok) {
+  let customers = [];
+  let runtimeDbError = "";
+  const q = String(searchParams?.q || "").trim();
+  const searchLike = `%${q}%`;
+  try {
+    const required = await requireTables(["customers"]);
+    if (!required.ok) {
+      return (
+        <section className="card">
+          <h2>Select Customer</h2>
+          <p>Missing required tables: {required.missing.join(", ")}.</p>
+        </section>
+      );
+    }
+
+    customers = await select(
+      `
+        SELECT
+          customer_id,
+          SPLIT_PART(full_name, ' ', 1) AS first_name,
+          CASE
+            WHEN POSITION(' ' IN full_name) > 0 THEN TRIM(SUBSTRING(full_name FROM POSITION(' ' IN full_name) + 1))
+            ELSE ''
+          END AS last_name,
+          email
+        FROM customers
+        WHERE is_active = TRUE
+          AND (? = '%%' OR full_name LIKE ? OR email LIKE ?)
+        ORDER BY full_name
+        LIMIT 200
+      `,
+      [searchLike, searchLike, searchLike]
+    );
+  } catch (error) {
+    runtimeDbError = String(error?.message || error || "Database query failed.");
+  }
+
+  if (runtimeDbError) {
     return (
       <section className="card">
         <h2>Select Customer</h2>
-        <p>Missing required tables: {required.missing.join(", ")}.</p>
+        <p>Connected database could not be queried.</p>
+        <p style={{ color: "#b91c1c" }}>{runtimeDbError}</p>
       </section>
     );
   }
-
-  const q = String(searchParams?.q || "").trim();
-  const searchLike = `%${q}%`;
-  const customers = await select(
-    `
-      SELECT
-        customer_id,
-        SPLIT_PART(full_name, ' ', 1) AS first_name,
-        CASE
-          WHEN POSITION(' ' IN full_name) > 0 THEN TRIM(SUBSTRING(full_name FROM POSITION(' ' IN full_name) + 1))
-          ELSE ''
-        END AS last_name,
-        email
-      FROM customers
-      WHERE is_active = TRUE
-        AND (? = '%%' OR full_name LIKE ? OR email LIKE ?)
-      ORDER BY full_name
-      LIMIT 200
-    `,
-    [searchLike, searchLike, searchLike]
-  );
 
   return (
     <section className="card">
