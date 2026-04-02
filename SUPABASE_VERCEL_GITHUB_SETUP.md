@@ -96,16 +96,18 @@ Expected counts from your current SQLite snapshot:
 3. In Vercel project settings:
    - Framework preset: Next.js
    - Add env vars (Preview + Production):
-     - `SUPABASE_URL`
-     - `SUPABASE_ANON_KEY`
+     - `SUPABASE_DB_URL` (required by current app server code)
+     - `DATABASE_URL` (optional fallback to same value)
+     - `NEXT_PUBLIC_SUPABASE_URL` (optional, client-side Supabase usage)
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (optional, client-side Supabase usage)
      - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-     - `SUPABASE_DB_URL` (if using direct Postgres connection)
 4. Enable automatic deployments from `main` (default in Vercel).
 
 After this, every push to GitHub triggers a new Vercel deployment.
 
-## 8) Next app code migration note
+## 8) Current app status
 
-Your app currently uses `better-sqlite3` (`src/lib/db.js`), so it still points at local `shop.db`.
+The app in this repo now uses Postgres via `pg` in `src/lib/db.js` and reads:
 
-Next step (after DB is loaded): swap `src/lib/db.js` for a Postgres/Supabase client and update queries where SQLite-specific syntax exists.
+- `SUPABASE_DB_URL` (preferred)
+- `DATABASE_URL` (fallback)

@@ -1,7 +1,7 @@
 import { select } from "@/lib/db";
 
-export default function WarehousePriorityQueuePage() {
-  const queue = select(
+export default async function WarehousePriorityQueuePage() {
+  const queue = await select(
     `
       SELECT o.order_id, o.order_datetime, o.order_total, o.risk_score,
              c.full_name,

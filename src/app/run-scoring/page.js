@@ -3,16 +3,16 @@ import { execute, selectOne } from "@/lib/db";
 async function runScoringAction() {
   "use server";
 
-  const result = execute(
+  const result = await execute(
     `
       UPDATE orders
       SET risk_score = ROUND(
-        MIN(
+        LEAST(
           100,
           5
           + CASE WHEN payment_method = 'crypto' THEN 25 ELSE 0 END
           + CASE WHEN ip_country != 'US' THEN 15 ELSE 0 END
-          + CASE WHEN promo_used = 1 THEN 8 ELSE 0 END
+          + CASE WHEN promo_used = TRUE THEN 8 ELSE 0 END
           + CASE WHEN order_total > 300 THEN 10 ELSE 0 END
         ),
         1
@@ -22,10 +22,10 @@ async function runScoringAction() {
           5
           + CASE WHEN payment_method = 'crypto' THEN 25 ELSE 0 END
           + CASE WHEN ip_country != 'US' THEN 15 ELSE 0 END
-          + CASE WHEN promo_used = 1 THEN 8 ELSE 0 END
+          + CASE WHEN promo_used = TRUE THEN 8 ELSE 0 END
           + CASE WHEN order_total > 300 THEN 10 ELSE 0 END
-        ) >= 70 THEN 1
-        ELSE 0
+        ) >= 70 THEN TRUE
+        ELSE FALSE
       END
     `
   );
@@ -34,10 +34,10 @@ async function runScoringAction() {
 }
 
 export default async function RunScoringPage() {
-  const summary = selectOne(
+  const summary = await selectOne(
     `
       SELECT COUNT(*) AS total_orders,
-             SUM(CASE WHEN is_fraud = 1 THEN 1 ELSE 0 END) AS fraud_flags,
+             SUM(CASE WHEN is_fraud = TRUE THEN 1 ELSE 0 END) AS fraud_flags,
              AVG(risk_score) AS avg_risk
       FROM orders
     `
@@ -46,7 +46,7 @@ export default async function RunScoringPage() {
   return (
     <section className="card">
       <h2>Run Scoring</h2>
-      <p>Recalculate risk and fraud labels for all orders in SQLite.</p>
+      <p>Recalculate risk and fraud labels for all orders in Supabase Postgres.</p>
 
       <form
         action={async () => {

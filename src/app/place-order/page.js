@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getDb, getDbStatus, requireTables, select } from "@/lib/db";
+import { getDbStatus, requireTables, select, withTransaction } from "@/lib/db";
 import { getActingCustomerId } from "@/lib/session";
 
 const LINE_ITEM_ROWS = 5;
@@ -8,18 +8,13 @@ function nowTimestamp() {
   return new Date().toISOString();
 }
 
-function hasColumn(columns, name) {
-  return columns.some((c) => c.name === name);
-}
-
 async function placeOrderAction(formData) {
   "use server";
 
   const customerId = await getActingCustomerId();
   if (!customerId) redirect("/select-customer");
-  const db = getDb();
 
-  const required = requireTables(["orders", "order_items", "products"]);
+  const required = await requireTables(["orders", "order_items", "products"]);
   if (!required.ok) {
     redirect(`/place-order?error=${encodeURIComponent(`Missing required tables: ${required.missing.join(", ")}`)}`);
   }
@@ -46,11 +41,11 @@ async function placeOrderAction(formData) {
     redirect("/place-order?error=At+least+one+line+item+is+required");
   }
 
-  const products = select(
+  const products = await select(
     `
       SELECT product_id, product_name, price
       FROM products
-      WHERE is_active = 1
+      WHERE is_active = TRUE
       ORDER BY product_name
     `
   );
@@ -71,62 +66,48 @@ async function placeOrderAction(formData) {
   }
 
   const totalValue = lineItems.reduce((acc, item) => acc + item.lineTotal, 0);
-  const orderColumns = db.prepare("PRAGMA table_info(orders)").all();
-  const timestampField = hasColumn(orderColumns, "order_timestamp") ? "order_timestamp" : "order_datetime";
-  const totalField = hasColumn(orderColumns, "total_value") ? "total_value" : "order_total";
-  const hasFulfilled = hasColumn(orderColumns, "fulfilled");
-
-  const transaction = db.transaction(() => {
-    const orderInsertSql = hasFulfilled
-      ? `
-          INSERT INTO orders (customer_id, ${timestampField}, fulfilled, ${totalField})
-          VALUES (?, ?, ?, ?)
-        `
-      : `
-          INSERT INTO orders (
-            customer_id, ${timestampField}, billing_zip, shipping_zip, shipping_state,
-            payment_method, device_type, ip_country, promo_used, promo_code,
-            order_subtotal, shipping_fee, tax_amount, ${totalField}, risk_score, is_fraud
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-
-    const orderStmt = db.prepare(orderInsertSql);
+  await withTransaction(async (tx) => {
     const now = nowTimestamp();
-    const orderResult = hasFulfilled
-      ? orderStmt.run(customerId, now, 0, totalValue)
-      : orderStmt.run(
-          customerId,
-          now,
-          "84058",
-          "84058",
-          "UT",
-          "card",
-          "desktop",
-          "US",
-          0,
-          null,
-          totalValue,
-          0,
-          0,
-          totalValue,
-          5,
-          0
-        );
-
-    const orderId = Number(orderResult.lastInsertRowid);
-    const itemStmt = db.prepare(
+    const orderInsert = await tx.selectOne(
       `
-        INSERT INTO order_items (order_id, product_id, quantity, unit_price, line_total)
-        VALUES (?, ?, ?, ?, ?)
-      `
+        INSERT INTO orders (
+          customer_id, order_datetime, billing_zip, shipping_zip, shipping_state,
+          payment_method, device_type, ip_country, promo_used, promo_code,
+          order_subtotal, shipping_fee, tax_amount, order_total, risk_score, is_fraud
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING order_id
+      `,
+      [
+        customerId,
+        now,
+        "84058",
+        "84058",
+        "UT",
+        "card",
+        "desktop",
+        "US",
+        false,
+        null,
+        totalValue,
+        0,
+        0,
+        totalValue,
+        5,
+        false
+      ]
     );
 
+    const orderId = Number(orderInsert?.order_id);
     for (const item of lineItems) {
-      itemStmt.run(orderId, item.productId, item.quantity, item.unitPrice, item.lineTotal);
+      await tx.execute(
+        `
+          INSERT INTO order_items (order_id, product_id, quantity, unit_price, line_total)
+          VALUES (?, ?, ?, ?, ?)
+        `,
+        [orderId, item.productId, item.quantity, item.unitPrice, item.lineTotal]
+      );
     }
   });
-
-  transaction();
   redirect("/orders?placed=1");
 }
 
@@ -144,7 +125,7 @@ export default async function PlaceOrderPage({ searchParams }) {
       </section>
     );
   }
-  const required = requireTables(["products", "orders", "order_items"]);
+  const required = await requireTables(["products", "orders", "order_items"]);
   if (!required.ok) {
     return (
       <section className="card">
@@ -154,8 +135,8 @@ export default async function PlaceOrderPage({ searchParams }) {
     );
   }
 
-  const products = select(
-    `SELECT product_id, product_name, price FROM products WHERE is_active = 1 ORDER BY product_name`
+  const products = await select(
+    `SELECT product_id, product_name, price FROM products WHERE is_active = TRUE ORDER BY product_name`
   );
 
   return (

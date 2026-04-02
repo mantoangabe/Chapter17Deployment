@@ -9,7 +9,7 @@ export default async function CustomerDashboardPage() {
     redirect("/select-customer");
   }
 
-  const customer = selectOne(
+  const customer = await selectOne(
     `
       SELECT customer_id, full_name, email, city, state, customer_segment, loyalty_tier
       FROM customers
@@ -22,7 +22,7 @@ export default async function CustomerDashboardPage() {
     redirect("/select-customer");
   }
 
-  const stats = selectOne(
+  const stats = await selectOne(
     `
       SELECT
         COUNT(*) AS order_count,
@@ -34,7 +34,7 @@ export default async function CustomerDashboardPage() {
     [customerId]
   );
 
-  const recentOrders = select(
+  const recentOrders = await select(
     `
       SELECT order_id, order_datetime, order_total, payment_method, is_fraud
       FROM orders

@@ -6,7 +6,7 @@ export default async function OrderHistoryPage() {
   const customerId = await getActingCustomerId();
   if (!customerId) redirect("/select-customer");
 
-  const orders = select(
+  const orders = await select(
     `
       SELECT o.order_id, o.order_datetime, o.order_total, o.risk_score, o.payment_method,
              COUNT(oi.order_item_id) AS line_count

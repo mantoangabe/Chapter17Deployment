@@ -1,19 +1,14 @@
 import { redirect } from "next/navigation";
-import { getDb, selectOne } from "@/lib/db";
+import { select, selectOne } from "@/lib/db";
 import { getActingCustomerId } from "@/lib/session";
-
-function hasColumn(columns, name) {
-  return columns.some((c) => c.name === name);
-}
 
 export default async function DashboardPage() {
   const customerId = await getActingCustomerId();
   if (!customerId) {
     redirect("/select-customer");
   }
-  const db = getDb();
 
-  const customer = selectOne(
+  const customer = await selectOne(
     `
       SELECT customer_id, full_name, email
       FROM customers
@@ -26,41 +21,31 @@ export default async function DashboardPage() {
     redirect("/select-customer");
   }
 
-  const orderColumns = db.prepare("PRAGMA table_info(orders)").all();
-  const totalField = hasColumn(orderColumns, "total_value") ? "total_value" : "order_total";
-  const timestampField = hasColumn(orderColumns, "order_timestamp") ? "order_timestamp" : "order_datetime";
-  const fulfilledField = hasColumn(orderColumns, "fulfilled")
-    ? "fulfilled"
-    : hasColumn(orderColumns, "late_delivery")
-      ? "late_delivery"
-      : null;
-
-  const stats = selectOne(
+  const stats = await selectOne(
     `
       SELECT
         COUNT(*) AS total_orders,
-        COALESCE(SUM(${totalField}), 0) AS total_spend
+        COALESCE(SUM(order_total), 0) AS total_spend
       FROM orders
       WHERE customer_id = ?
     `,
     [customerId]
   );
 
-  const recentOrders = db
-    .prepare(
-      `
-        SELECT
-          order_id,
-          ${timestampField} AS order_timestamp,
-          ${fulfilledField ? `${fulfilledField} AS fulfilled,` : "NULL AS fulfilled,"}
-          ${totalField} AS total_value
-        FROM orders
-        WHERE customer_id = ?
-        ORDER BY ${timestampField} DESC
-        LIMIT 5
-      `
-    )
-    .all(customerId);
+  const recentOrders = await select(
+    `
+      SELECT
+        order_id,
+        order_datetime AS order_timestamp,
+        NULL::boolean AS fulfilled,
+        order_total AS total_value
+      FROM orders
+      WHERE customer_id = ?
+      ORDER BY order_datetime DESC
+      LIMIT 5
+    `,
+    [customerId]
+  );
 
   return (
     <>

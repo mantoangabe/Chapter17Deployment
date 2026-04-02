@@ -13,7 +13,7 @@ async function chooseCustomer(formData) {
   redirect("/dashboard");
 }
 
-export default function SelectCustomerPage({ searchParams }) {
+export default async function SelectCustomerPage({ searchParams }) {
   const dbStatus = getDbStatus();
   if (!dbStatus.ok) {
     return (
@@ -24,7 +24,7 @@ export default function SelectCustomerPage({ searchParams }) {
       </section>
     );
   }
-  const required = requireTables(["customers"]);
+  const required = await requireTables(["customers"]);
   if (!required.ok) {
     return (
       <section className="card">
@@ -36,25 +36,18 @@ export default function SelectCustomerPage({ searchParams }) {
 
   const q = String(searchParams?.q || "").trim();
   const searchLike = `%${q}%`;
-  const customers = select(
+  const customers = await select(
     `
       SELECT
         customer_id,
-        TRIM(
-          CASE
-            WHEN INSTR(full_name, ' ') > 0 THEN SUBSTR(full_name, 1, INSTR(full_name, ' ') - 1)
-            ELSE full_name
-          END
-        ) AS first_name,
-        TRIM(
-          CASE
-            WHEN INSTR(full_name, ' ') > 0 THEN SUBSTR(full_name, INSTR(full_name, ' ') + 1)
-            ELSE ''
-          END
-        ) AS last_name,
+        SPLIT_PART(full_name, ' ', 1) AS first_name,
+        CASE
+          WHEN POSITION(' ' IN full_name) > 0 THEN TRIM(SUBSTRING(full_name FROM POSITION(' ' IN full_name) + 1))
+          ELSE ''
+        END AS last_name,
         email
       FROM customers
-      WHERE is_active = 1
+      WHERE is_active = TRUE
         AND (? = '%%' OR full_name LIKE ? OR email LIKE ?)
       ORDER BY full_name
       LIMIT 200

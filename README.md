@@ -1,6 +1,6 @@
-# Student Shop App (Next.js + SQLite)
+# Student Shop App (Next.js + Supabase Postgres)
 
-Simple student project web app using Next.js App Router, SQLite (`shop.db` at project root), and `better-sqlite3`.
+Simple student project web app using Next.js App Router and Supabase Postgres.
 
 ## Features
 
@@ -34,7 +34,7 @@ npm run dev
 
 ## Project Expectations
 
-- Database file path defaults to `./shop.db`.
+- Server-side database access uses `SUPABASE_DB_URL` (or `DATABASE_URL`).
 - No authentication is used; students choose a customer in `/select-customer`.
 - Selected customer id is stored in an HTTP-only cookie named `acting_customer_id`.
 
@@ -47,14 +47,11 @@ npm run dev
 
 ## DB Configuration
 
-- Default DB path: `./shop.db`
-- Optional override: set `SHOP_DB_PATH`
-
-Example:
-
-```bash
-SHOP_DB_PATH=/data/shop.db npm run dev
-```
+- Required server env var:
+  - `SUPABASE_DB_URL` (preferred) or `DATABASE_URL`
+- Optional client env vars (for future Supabase client usage):
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 ## Supabase + Vercel
 

@@ -5,7 +5,7 @@ import { getActingCustomerId } from "@/lib/session";
 
 export const metadata = {
   title: "Student Shop App",
-  description: "Next.js + SQLite student project"
+  description: "Next.js + Supabase student project"
 };
 
 const navLinks = [
@@ -25,7 +25,7 @@ export default async function RootLayout({ children }) {
   let actingCustomer = null;
   if (dbStatus.ok && actingCustomerId != null) {
     try {
-      actingCustomer = selectOne(
+      actingCustomer = await selectOne(
         `
           SELECT customer_id, full_name, email
           FROM customers

@@ -1,60 +1,48 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { getDb, selectOne } from "@/lib/db";
+import { select, selectOne } from "@/lib/db";
 import { getActingCustomerId } from "@/lib/session";
-
-function hasColumn(columns, name) {
-  return columns.some((c) => c.name === name);
-}
 
 export default async function OrderDetailPage({ params }) {
   const customerId = await getActingCustomerId();
   if (!customerId) redirect("/select-customer");
-  const db = getDb();
 
   const orderId = Number(params.order_id);
   if (!Number.isInteger(orderId) || orderId <= 0) notFound();
 
-  const orderColumns = db.prepare("PRAGMA table_info(orders)").all();
-  const timestampField = hasColumn(orderColumns, "order_timestamp") ? "order_timestamp" : "order_datetime";
-  const totalField = hasColumn(orderColumns, "total_value") ? "total_value" : "order_total";
-  const fulfilledField = hasColumn(orderColumns, "fulfilled") ? "fulfilled" : "NULL";
-
-  const order = db
-    .prepare(
-      `
-        SELECT
-          order_id,
-          customer_id,
-          ${timestampField} AS order_timestamp,
-          ${fulfilledField} AS fulfilled,
-          ${totalField} AS total_value
-        FROM orders
-        WHERE order_id = ?
-      `
-    )
-    .get(orderId);
+  const order = await selectOne(
+    `
+      SELECT
+        order_id,
+        customer_id,
+        order_datetime AS order_timestamp,
+        NULL::boolean AS fulfilled,
+        order_total AS total_value
+      FROM orders
+      WHERE order_id = ?
+    `,
+    [orderId]
+  );
 
   if (!order) notFound();
   if (Number(order.customer_id) !== Number(customerId)) notFound();
 
-  const items = db
-    .prepare(
-      `
-        SELECT
-          p.product_name,
-          oi.quantity,
-          oi.unit_price,
-          oi.line_total
-        FROM order_items oi
-        JOIN products p ON p.product_id = oi.product_id
-        WHERE oi.order_id = ?
-        ORDER BY oi.order_item_id ASC
-      `
-    )
-    .all(orderId);
+  const items = await select(
+    `
+      SELECT
+        p.product_name,
+        oi.quantity,
+        oi.unit_price,
+        oi.line_total
+      FROM order_items oi
+      JOIN products p ON p.product_id = oi.product_id
+      WHERE oi.order_id = ?
+      ORDER BY oi.order_item_id ASC
+    `,
+    [orderId]
+  );
 
-  const customer = selectOne(
+  const customer = await selectOne(
     `
       SELECT full_name, email
       FROM customers

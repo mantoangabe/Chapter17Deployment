@@ -1,81 +1,102 @@
-import path from "node:path";
-import Database from "better-sqlite3";
+import { Pool } from "pg";
 
-const dbPath = process.env.SHOP_DB_PATH || path.join(process.cwd(), "shop.db");
+const dbUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "";
 
-let dbError = null;
-let db = null;
+const pool = dbUrl
+  ? new Pool({
+      connectionString: dbUrl,
+      ssl: { rejectUnauthorized: false }
+    })
+  : null;
 
-try {
-  db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  ensureHelpfulIndexes();
-} catch (error) {
-  dbError = error;
+function ensurePool() {
+  if (!pool) {
+    throw new Error("Database is unavailable: set SUPABASE_DB_URL (or DATABASE_URL).");
+  }
+  return pool;
 }
 
-function ensureHelpfulIndexes() {
-  try {
-    db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
-      CREATE INDEX IF NOT EXISTS idx_orders_datetime ON orders(order_datetime);
-      CREATE INDEX IF NOT EXISTS idx_shipments_order_id ON shipments(order_id);
-      CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
-    `);
-  } catch {
-    // Ignore index creation issues when tables are not present yet.
-  }
+function toPgParams(sql, params = []) {
+  let index = 0;
+  const text = String(sql).replace(/\?/g, () => {
+    index += 1;
+    return `$${index}`;
+  });
+  return { text, values: params };
 }
 
-function requireDb() {
-  if (!db) {
-    throw new Error(`Database is unavailable at ${dbPath}: ${dbError?.message || "unknown error"}`);
-  }
-  return db;
+async function queryWith(clientOrPool, sql, params = []) {
+  const { text, values } = toPgParams(sql, params);
+  return clientOrPool.query(text, values);
 }
 
 export function getDbStatus() {
   return {
-    ok: Boolean(db),
-    path: dbPath,
-    error: dbError ? String(dbError.message || dbError) : null
+    ok: Boolean(pool),
+    path: "SUPABASE_DB_URL",
+    error: pool ? null : "Missing SUPABASE_DB_URL (or DATABASE_URL)."
   };
 }
 
-export function tableExists(tableName) {
-  const conn = requireDb();
-  const row = conn
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(String(tableName));
-  return Boolean(row);
+export async function tableExists(tableName) {
+  const conn = ensurePool();
+  const result = await queryWith(
+    conn,
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = ?
+      ) AS exists
+    `,
+    [String(tableName)]
+  );
+  return Boolean(result.rows[0]?.exists);
 }
 
-export function requireTables(tableNames) {
-  const missing = tableNames.filter((name) => !tableExists(name));
-  return {
-    ok: missing.length === 0,
-    missing
-  };
+export async function requireTables(tableNames) {
+  const checks = await Promise.all(tableNames.map((name) => tableExists(name)));
+  const missing = tableNames.filter((_, idx) => !checks[idx]);
+  return { ok: missing.length === 0, missing };
 }
 
-export function select(sql, params = []) {
-  return requireDb().prepare(sql).all(params);
+export async function select(sql, params = []) {
+  const conn = ensurePool();
+  const result = await queryWith(conn, sql, params);
+  return result.rows;
 }
 
-export function selectOne(sql, params = []) {
-  return requireDb().prepare(sql).get(params);
+export async function selectOne(sql, params = []) {
+  const rows = await select(sql, params);
+  return rows[0] || null;
 }
 
-export function execute(sql, params = []) {
-  return requireDb().prepare(sql).run(params);
+export async function execute(sql, params = []) {
+  const conn = ensurePool();
+  const result = await queryWith(conn, sql, params);
+  return { changes: result.rowCount || 0 };
 }
 
-export function withTransaction(work) {
-  const tx = requireDb().transaction(work);
-  return tx();
-}
-
-export { dbPath };
-export function getDb() {
-  return requireDb();
+export async function withTransaction(work) {
+  const conn = ensurePool();
+  const client = await conn.connect();
+  try {
+    await client.query("BEGIN");
+    const tx = {
+      select: async (sql, params = []) => (await queryWith(client, sql, params)).rows,
+      selectOne: async (sql, params = []) => (await queryWith(client, sql, params)).rows[0] || null,
+      execute: async (sql, params = []) => {
+        const result = await queryWith(client, sql, params);
+        return { changes: result.rowCount || 0 };
+      }
+    };
+    const result = await work(tx);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
