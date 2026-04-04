@@ -27,7 +27,7 @@ export default async function CustomerDashboardPage() {
       SELECT
         COUNT(*) AS order_count,
         COALESCE(SUM(order_total), 0) AS total_spent,
-        COALESCE(AVG(risk_score), 0) AS avg_risk
+        COALESCE(AVG(fraud_probability), 0) AS avg_fraud_prob
       FROM orders
       WHERE customer_id = ?
     `,
@@ -36,7 +36,7 @@ export default async function CustomerDashboardPage() {
 
   const recentOrders = await select(
     `
-      SELECT order_id, order_datetime, order_total, payment_method, is_fraud
+      SELECT order_id, order_datetime, order_total, payment_method, predicted_fraud, actual_fraud
       FROM orders
       WHERE customer_id = ?
       ORDER BY order_datetime DESC
@@ -68,8 +68,8 @@ export default async function CustomerDashboardPage() {
           <p>${Number(stats.total_spent).toFixed(2)}</p>
         </article>
         <article className="card">
-          <h3>Average Risk Score</h3>
-          <p>{Number(stats.avg_risk).toFixed(1)}</p>
+          <h3>Average Fraud Probability</h3>
+          <p>{Number(stats.avg_fraud_prob).toFixed(4)}</p>
         </article>
       </section>
 
@@ -82,7 +82,8 @@ export default async function CustomerDashboardPage() {
               <th>Date</th>
               <th>Total</th>
               <th>Payment</th>
-              <th>Fraud?</th>
+              <th>Predicted Fraud</th>
+              <th>Actual Fraud</th>
             </tr>
           </thead>
           <tbody>
@@ -92,7 +93,8 @@ export default async function CustomerDashboardPage() {
                 <td>{o.order_datetime}</td>
                 <td>${Number(o.order_total).toFixed(2)}</td>
                 <td>{o.payment_method}</td>
-                <td>{o.is_fraud ? "Yes" : "No"}</td>
+                <td>{o.predicted_fraud ? "Yes" : "No"}</td>
+                <td>{o.actual_fraud ? "Yes" : "No"}</td>
               </tr>
             ))}
           </tbody>

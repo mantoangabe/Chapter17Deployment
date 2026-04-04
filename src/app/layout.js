@@ -14,7 +14,8 @@ const navLinks = [
   ["Place Order", "/place-order"],
   ["Order History", "/order-history"],
   ["Warehouse Priority Queue", "/warehouse-priority-queue"],
-  ["Run Scoring", "/scoring"]
+  ["Run Scoring", "/scoring"],
+  ["Fraud Review", "/fraud-review"]
 ];
 
 const devOnlyLinks = [["Debug Schema", "/debug/schema"]];
