@@ -1,4 +1,13 @@
-import { Pool } from "pg";
+import { Pool, types } from "pg";
+
+// Keep date/time columns as strings from the wire format. Default pg parsers use JS Date,
+// which breaks React rendering (error #31) and can confuse RSC serialization.
+const timeOids = types.builtins
+  ? [types.builtins.TIMESTAMP, types.builtins.TIMESTAMPTZ, types.builtins.DATE]
+  : [1114, 1184, 1082];
+for (const oid of timeOids) {
+  if (oid != null) types.setTypeParser(oid, (str) => str);
+}
 
 const dbUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "";
 
@@ -28,6 +37,24 @@ function toPgParams(sql, params = []) {
 async function queryWith(clientOrPool, sql, params = []) {
   const { text, values } = toPgParams(sql, params);
   return clientOrPool.query(text, values);
+}
+
+/** Defense in depth: convert any Date values (React cannot render Date — error #31). */
+function serializeRow(row) {
+  if (!row || typeof row !== "object") return row;
+  const out = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value instanceof Date) {
+      out[key] = Number.isNaN(value.getTime()) ? null : value.toISOString();
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function serializeRows(rows) {
+  return rows.map((r) => serializeRow(r));
 }
 
 export function getDbStatus() {
@@ -63,7 +90,7 @@ export async function requireTables(tableNames) {
 export async function select(sql, params = []) {
   const conn = ensurePool();
   const result = await queryWith(conn, sql, params);
-  return result.rows;
+  return serializeRows(result.rows);
 }
 
 export async function selectOne(sql, params = []) {
@@ -83,8 +110,11 @@ export async function withTransaction(work) {
   try {
     await client.query("BEGIN");
     const tx = {
-      select: async (sql, params = []) => (await queryWith(client, sql, params)).rows,
-      selectOne: async (sql, params = []) => (await queryWith(client, sql, params)).rows[0] || null,
+      select: async (sql, params = []) => serializeRows((await queryWith(client, sql, params)).rows),
+      selectOne: async (sql, params = []) => {
+        const row = (await queryWith(client, sql, params)).rows[0];
+        return row ? serializeRow(row) : null;
+      },
       execute: async (sql, params = []) => {
         const result = await queryWith(client, sql, params);
         return { changes: result.rowCount || 0 };
