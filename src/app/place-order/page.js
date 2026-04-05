@@ -73,7 +73,7 @@ async function placeOrderAction(formData) {
         INSERT INTO orders (
           customer_id, order_datetime, billing_zip, shipping_zip, shipping_state,
           payment_method, device_type, ip_country, promo_used, promo_code,
-          order_subtotal, shipping_fee, tax_amount, order_total, risk_score, is_fraud
+          order_subtotal, shipping_fee, tax_amount, order_total, actual_fraud, predicted_fraud
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING order_id
       `,
@@ -92,7 +92,7 @@ async function placeOrderAction(formData) {
         0,
         0,
         totalValue,
-        5,
+        false,
         false
       ]
     );

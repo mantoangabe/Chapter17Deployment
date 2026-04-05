@@ -79,8 +79,9 @@ def load_modeling_frame() -> pd.DataFrame:
             df[c] = df[c].fillna(0)
 
     drop_cols = []
-    if "risk_score" in df.columns:
-        drop_cols.append("risk_score")
+    for leak_col in ["risk_score", "predicted_fraud", "fraud_probability"]:
+        if leak_col in df.columns:
+            drop_cols.append(leak_col)
     if "order_id" in df.columns:
         drop_cols.append("order_id")
     df = df.drop(columns=[c for c in drop_cols if c in df.columns])
@@ -121,9 +122,9 @@ def load_modeling_frame() -> pd.DataFrame:
 
 def main() -> None:
     df = load_modeling_frame()
-    y = df["is_fraud"].astype(int)
+    y = df["actual_fraud"].astype(int)
     drop_x = [
-        "is_fraud",
+        "actual_fraud",
         "order_datetime",
         "full_name",
         "email",

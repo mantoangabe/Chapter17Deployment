@@ -24,7 +24,7 @@ TABLES = [
 BOOLEAN_COLUMNS = {
     "customers": {"is_active"},
     "products": {"is_active"},
-    "orders": {"promo_used", "is_fraud"},
+    "orders": {"promo_used", "actual_fraud", "predicted_fraud"},
     "shipments": {"late_delivery"},
 }
 

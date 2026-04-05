@@ -8,12 +8,12 @@ export default async function OrderHistoryPage() {
 
   const orders = await select(
     `
-      SELECT o.order_id, o.order_datetime, o.order_total, o.risk_score, o.payment_method,
+      SELECT o.order_id, o.order_datetime, o.order_total, o.fraud_probability, o.predicted_fraud, o.payment_method,
              COUNT(oi.order_item_id) AS line_count
       FROM orders o
       LEFT JOIN order_items oi ON oi.order_id = o.order_id
       WHERE o.customer_id = ?
-      GROUP BY o.order_id
+      GROUP BY o.order_id, o.order_datetime, o.order_total, o.fraud_probability, o.predicted_fraud, o.payment_method
       ORDER BY o.order_datetime DESC
       LIMIT 50
     `,
@@ -30,7 +30,8 @@ export default async function OrderHistoryPage() {
             <th>Date</th>
             <th>Items</th>
             <th>Payment</th>
-            <th>Risk</th>
+            <th>Fraud Prob</th>
+            <th>Predicted Fraud</th>
             <th>Total</th>
           </tr>
         </thead>
@@ -41,7 +42,8 @@ export default async function OrderHistoryPage() {
               <td>{o.order_datetime}</td>
               <td>{o.line_count}</td>
               <td>{o.payment_method}</td>
-              <td>{Number(o.risk_score).toFixed(1)}</td>
+              <td>{o.fraud_probability != null ? Number(o.fraud_probability).toFixed(4) : "--"}</td>
+              <td>{o.predicted_fraud ? "Yes" : "No"}</td>
               <td>${Number(o.order_total).toFixed(2)}</td>
             </tr>
           ))}
